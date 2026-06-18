@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Confluence — Free Model Fusion via OpenRouter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0D0E12;
+    --bg-raised:#15171D;
+    --bg-card:#1A1C23;
+    --line:#2A2D36;
+    --text:#E8E6E1;
+    --text-dim:#9A9CA6;
+    --text-faint:#5C5F6A;
+
+    --c1:#7C9EFF; /* model slot 1 - blue   */
+    --c2:#FF8B6B; /* model slot 2 - coral  */
+    --c3:#6BCF9E; /* model slot 3 - mint   */
+    --c4:#E8C468; /* model slot 4 - amber  */
+    --judge:#C9A8FF; /* judge - violet */
+
+    --good:#6BCF9E;
+    --bad:#FF6B6B;
+
+    --serif: 'Instrument Serif', Georgia, serif;
+    --sans: 'Inter', -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:
+      radial-gradient(ellipse 1200px 600px at 50% -10%, #1a1d2a 0%, transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    min-height:100vh;
+    line-height:1.5;
+  }
+
+  ::selection{ background:var(--judge); color:#16131f; }
+
+  a{ color:inherit; }
+
+  .skip-link{
+    position:absolute; left:-9999px; top:0;
+    background:var(--judge); color:#16131f; padding:.6rem 1rem; border-radius:6px; z-index:100;
+  }
+  .skip-link:focus{ left:1rem; top:1rem; }
+
+  /* ---------- Layout shell ---------- */
+  .shell{
+    display:grid;
+    grid-template-columns: 320px 1fr;
+    min-height:100vh;
+  }
+  @media (max-width: 880px){
+    .shell{ grid-template-columns: 1fr; }
+    .rail{ position:static; height:auto; border-right:none; border-bottom:1px solid var(--line); }
+  }
+
+  /* ---------- Left rail ---------- */
+  .rail{
+    border-right:1px solid var(--line);
+    background:var(--bg-raised);
+    padding:1.75rem 1.5rem 2.5rem;
+    position:sticky; top:0; height:100vh; overflow-y:auto;
+  }
+  .brand{
+    display:flex; align-items:baseline; gap:.55rem; margin-bottom:.35rem;
+  }
+  .brand-mark{
+    width:11px; height:11px; border-radius:50%;
+    background: conic-gradient(from 180deg, var(--c1), var(--c2), var(--c3), var(--c4), var(--c1));
+    flex-shrink:0;
+  }
+  .brand h1{
+    font-family:var(--serif); font-style:italic; font-weight:400;
+    font-size:1.55rem; letter-spacing:.01em;
+  }
+  .brand-sub{
+    color:var(--text-faint); font-size:.78rem; margin-bottom:1.75rem; padding-left:1.55rem;
+  }
+
+  .field{ margin-bottom:1.4rem; }
+  .field label{
+    display:block; font-size:.72rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--text-dim); margin-bottom:.5rem;
+  }
+  .field-hint{
+    font-size:.74rem; color:var(--text-faint); margin-top:.45rem; line-height:1.45;
+  }
+  .field-hint a{ color:var(--c1); text-decoration:underline; text-underline-offset:2px; }
+
+  input[type="password"], input[type="text"]{
+    width:100%; background:var(--bg-card); border:1px solid var(--line); color:var(--text);
+    padding:.65rem .75rem; border-radius:8px; font-family:var(--mono); font-size:.82rem;
+    transition:border-color .15s ease;
+  }
+  input[type="password"]:focus, input[type="text"]:focus{
+    outline:none; border-color:var(--c1);
+  }
+
+  .key-row{ display:flex; gap:.5rem; }
+  .key-row input{ flex:1; min-width:0; }
+
+  .btn{
+    font-family:var(--sans); font-weight:600; font-size:.82rem; letter-spacing:.01em;
+    border:1px solid var(--line); background:var(--bg-card); color:var(--text);
+    padding:.65rem 1rem; border-radius:8px; cursor:pointer;
+    transition: border-color .15s ease, transform .1s ease, background .15s ease;
+  }
+  .btn:hover{ border-color:var(--text-faint); }
+  .btn:active{ transform: scale(0.98); }
+  .btn:disabled{ opacity:.4; cursor:not-allowed; }
+  .btn-primary{
+    background:var(--judge); color:#16131f; border-color:var(--judge);
+    width:100%; padding:.8rem 1rem; font-size:.88rem;
+  }
+  .btn-primary:hover{ background:#d9bdff; border-color:#d9bdff; }
+  .btn-ghost{ background:transparent; }
+
+  .status-line{
+    font-size:.72rem; font-family:var(--mono); margin-top:.55rem; min-height:1.2em;
+  }
+  .status-line.ok{ color:var(--good); }
+  .status-line.err{ color:var(--bad); }
+  .status-line.pending{ color:var(--text-faint); }
+
+  /* model picker */
+  .model-search{ margin-bottom:.6rem; }
+  .model-list{
+    max-height:280px; overflow-y:auto;
+    border:1px solid var(--line); border-radius:8px; background:var(--bg-card);
+  }
+  .model-list::-webkit-scrollbar{ width:8px; }
+  .model-list::-webkit-scrollbar-thumb{ background:var(--line); border-radius:4px; }
+
+  .model-item{
+    display:flex; align-items:flex-start; gap:.6rem;
+    padding:.55rem .65rem; border-bottom:1px solid var(--line);
+    cursor:pointer; font-size:.78rem;
+  }
+  .model-item:last-child{ border-bottom:none; }
+  .model-item:hover{ background:#20232c; }
+  .model-item input{ margin-top:.2rem; accent-color:var(--judge); flex-shrink:0; }
+  .model-item .mi-name{ font-weight:500; color:var(--text); word-break:break-word; }
+  .model-item .mi-id{ font-family:var(--mono); font-size:.68rem; color:var(--text-faint); word-break:break-all; }
+  .model-item.disabled{ opacity:.35; cursor:not-allowed; }
+
+  .picked-count{
+    font-family:var(--mono); font-size:.72rem; color:var(--text-dim); margin-top:.5rem;
+  }
+  .picked-count.full{ color:var(--c4); }
+
+  select{
+    width:100%; background:var(--bg-card); border:1px solid var(--line); color:var(--text);
+    padding:.6rem .7rem; border-radius:8px; font-family:var(--sans); font-size:.82rem;
+    appearance:none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239A9CA6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right .85rem center;
+  }
+  select:focus{ outline:none; border-color:var(--judge); }
+  select:disabled{ opacity:.4; }
+
+  .judge-paid-toggle{
+    display:flex; align-items:center; gap:.5rem; margin-top:.6rem; font-size:.74rem; color:var(--text-dim);
+  }
+  .judge-paid-toggle input{ accent-color:var(--judge); }
+
+  hr.div{ border:none; border-top:1px solid var(--line); margin:1.5rem 0; }
+
+  /* ---------- Main stage ---------- */
+  .stage{ padding:2.75rem 3rem 5rem; max-width:1180px; }
+  @media (max-width: 880px){ .stage{ padding:2rem 1.25rem 4rem; } }
+
+  .stage-header{ margin-bottom:2rem; }
+  .stage-eyebrow{
+    font-family:var(--mono); font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--text-faint); margin-bottom:.6rem;
+  }
+  .stage-header h2{
+    font-family:var(--serif); font-weight:400; font-size:2.1rem; line-height:1.15; max-width:34ch;
+  }
+  .stage-header p{ color:var(--text-dim); margin-top:.75rem; max-width:58ch; font-size:.95rem; }
+
+  .prompt-box{
+    background:var(--bg-card); border:1px solid var(--line); border-radius:12px;
+    padding:1.1rem 1.2rem; margin-bottom:2rem;
+  }
+  .prompt-box textarea{
+    width:100%; min-height:110px; resize:vertical; background:transparent; border:none; color:var(--text);
+    font-family:var(--sans); font-size:.95rem; line-height:1.55;
+  }
+  .prompt-box textarea:focus{ outline:none; }
+  .prompt-box textarea::placeholder{ color:var(--text-faint); }
+  .prompt-actions{ display:flex; justify-content:space-between; align-items:center; margin-top:.75rem; gap:1rem; flex-wrap:wrap; }
+  .prompt-meta{ font-family:var(--mono); font-size:.7rem; color:var(--text-faint); }
+
+  /* ---------- Confluence visual ---------- */
+  .confluence{ position:relative; margin: 2.5rem 0 1rem; }
+  .panels{
+    display:grid; gap:1rem; margin-bottom:0;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+  .panel{
+    background:var(--bg-card); border:1px solid var(--line); border-radius:12px;
+    padding:1rem 1.1rem 1.15rem; min-height:160px; display:flex; flex-direction:column;
+    position:relative; overflow:hidden;
+    border-top:3px solid var(--slot-color, var(--line));
+    transition: box-shadow .25s ease;
+  }
+  .panel.streaming{ box-shadow: 0 0 0 1px var(--slot-color), 0 8px 24px -8px var(--slot-color); }
+  .panel-head{ display:flex; align-items:center; gap:.5rem; margin-bottom:.6rem; }
+  .panel-dot{ width:8px; height:8px; border-radius:50%; background:var(--slot-color, var(--text-faint)); flex-shrink:0; }
+  .panel-name{ font-size:.78rem; font-weight:600; word-break:break-word; }
+  .panel-id{ font-family:var(--mono); font-size:.65rem; color:var(--text-faint); margin-bottom:.6rem; word-break:break-all; }
+  .panel-body{
+    font-size:.82rem; color:var(--text-dim); line-height:1.55; white-space:pre-wrap;
+    flex:1; overflow-y:auto; max-height:280px;
+  }
+  .panel-body::-webkit-scrollbar{ width:6px; }
+  .panel-body::-webkit-scrollbar-thumb{ background:var(--line); border-radius:3px; }
+  .panel-state{
+    font-family:var(--mono); font-size:.68rem; margin-top:.6rem; display:flex; align-items:center; gap:.4rem;
+  }
+  .panel-state.wait{ color:var(--text-faint); }
+  .panel-state.run{ color:var(--slot-color); }
+  .panel-state.done{ color:var(--good); }
+  .panel-state.fail{ color:var(--bad); }
+  .spin{
+    width:9px; height:9px; border-radius:50%;
+    border:1.5px solid currentColor; border-top-color:transparent;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+
+  .funnel-wrap{ display:flex; justify-content:center; margin: -0.4rem 0 0; }
+  .funnel-svg{ width:100%; max-width:560px; height:64px; display:block; }
+  .funnel-line{
+    stroke-dasharray: 220; stroke-dashoffset: 220;
+    transition: stroke-dashoffset 1s ease;
+  }
+  .funnel-line.flow{ stroke-dashoffset: 0; }
+
+  .judge-card{
+    background: linear-gradient(180deg, #1d1828, var(--bg-card) 40%);
+    border:1px solid #3a3050; border-top:3px solid var(--judge);
+    border-radius:14px; padding:1.5rem 1.6rem 1.7rem; margin-top:0;
+  }
+  .judge-head{ display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:.9rem; flex-wrap:wrap; }
+  .judge-title{ display:flex; align-items:center; gap:.55rem; }
+  .judge-title .panel-dot{ background:var(--judge); width:9px; height:9px; }
+  .judge-title h3{ font-family:var(--serif); font-style:italic; font-weight:400; font-size:1.3rem; }
+  .judge-model-tag{ font-family:var(--mono); font-size:.68rem; color:var(--text-faint); }
+  .judge-body{ font-size:.95rem; line-height:1.7; color:var(--text); white-space:pre-wrap; }
+  .judge-body :first-child{ margin-top:0; }
+  .judge-empty{ color:var(--text-faint); font-size:.85rem; font-style:italic; }
+
+  .judge-state{ font-family:var(--mono); font-size:.72rem; color:var(--judge); display:flex; align-items:center; gap:.4rem; }
+
+  .run-footer{
+    display:flex; justify-content:space-between; align-items:center; margin-top:1.5rem;
+    font-family:var(--mono); font-size:.7rem; color:var(--text-faint); flex-wrap:wrap; gap:.5rem;
+  }
+
+  .empty-state{
+    border:1px dashed var(--line); border-radius:14px; padding:3rem 2rem; text-align:center;
+    color:var(--text-faint); font-size:.9rem;
+  }
+  .empty-state strong{ color:var(--text-dim); display:block; margin-bottom:.4rem; font-weight:500; }
+
+  footer.page-footer{
+    border-top:1px solid var(--line); margin-top:3rem; padding-top:1.5rem;
+    color:var(--text-faint); font-size:.75rem; display:flex; justify-content:space-between; flex-wrap:wrap; gap:.5rem;
+  }
+  footer.page-footer a{ color:var(--text-dim); text-decoration:underline; text-underline-offset:2px; }
+
+  .visually-hidden{
+    position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .spin{ animation:none; }
+    .funnel-line{ transition:none; }
+    .panel{ transition:none; }
+  }
+</style>
+</head>
+<body>
+<a href="#main" class="skip-link">Skip to main content</a>
+
+<div class="shell">
+  <!-- ============ LEFT RAIL: controls ============ -->
+  <aside class="rail" aria-label="Configuration">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <h1>Confluence</h1>
+    </div>
+    <p class="brand-sub">free-model panel → judge, via OpenRouter</p>
+
+    <div class="field">
+      <label for="apiKey">OpenRouter API key</label>
+      <div class="key-row">
+        <input type="password" id="apiKey" placeholder="sk-or-v1-…" autocomplete="off" />
+        <button class="btn btn-ghost" id="toggleKeyBtn" type="button" aria-label="Show key">👁</button>
+      </div>
+      <div class="field-hint">
+        Stored only in this browser tab (sessionStorage) — never sent anywhere but
+        <a href="https://openrouter.ai" target="_blank" rel="noopener">openrouter.ai</a>.
+        Get a key from <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>.
+      </div>
+      <div id="keyStatus" class="status-line pending"></div>
+    </div>
+
+    <div class="field">
+      <label for="modelSearch">Panel — free models <span id="freeCountTag"></span></label>
+      <div class="model-search">
+        <input type="text" id="modelSearch" placeholder="Filter (e.g. qwen, llama, gemma)…" disabled />
+      </div>
+      <div class="model-list" id="modelList" role="listbox" aria-label="Free model list" aria-multiselectable="true">
+        <div style="padding:.9rem; color:var(--text-faint); font-size:.78rem;">Enter a valid API key to load free models.</div>
+      </div>
+      <div class="picked-count" id="pickedCount">0 / 4 selected</div>
+    </div>
+
+    <hr class="div" />
+
+    <div class="field">
+      <label for="judgeSelect">Judge model</label>
+      <select id="judgeSelect" disabled>
+        <option>Load models first…</option>
+      </select>
+      <label class="judge-paid-toggle">
+        <input type="checkbox" id="showPaidJudge" />
+        Show paid models too
+      </label>
+      <div class="field-hint">The judge reads all panel responses and writes the final, synthesized answer. Pick a strong reasoner here — it doesn't have to be free.</div>
+    </div>
+
+    <hr class="div" />
+
+    <button class="btn btn-primary" id="runBtn" disabled>Run fusion</button>
+    <div id="runStatus" class="status-line pending"></div>
+  </aside>
+
+  <!-- ============ MAIN STAGE ============ -->
+  <main class="stage" id="main">
+    <div class="stage-header">
+      <div class="stage-eyebrow">4 free streams, 1 judged answer</div>
+      <h2>Ask once. Hear four models think it through, then let one weigh the rest.</h2>
+      <p>Pick up to four free OpenRouter models to answer in parallel, then a judge model — free or paid, your call — reviews all four and writes the final synthesis.</p>
+    </div>
+
+    <div class="prompt-box">
+      <label for="promptInput" class="visually-hidden">Your prompt</label>
+      <textarea id="promptInput" placeholder="Ask something worth getting four opinions on…"></textarea>
+      <div class="prompt-actions">
+        <span class="prompt-meta" id="promptMeta">0 characters</span>
+      </div>
+    </div>
+
+    <div class="confluence" id="confluence">
+      <div class="empty-state" id="emptyState">
+        <strong>Nothing fused yet</strong>
+        Add your key, choose up to four free models on the left, write a prompt above, then run fusion.
+      </div>
+    </div>
+
+    <footer class="page-footer">
+      <span>Each panel call and the judge call are billed separately by OpenRouter. Panel models tagged <code>:free</code> cost nothing; the judge may not be.</span>
+      <a href="https://openrouter.ai/docs" target="_blank" rel="noopener">OpenRouter docs ↗</a>
+    </footer>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const SLOT_COLORS = ['var(--c1)','var(--c2)','var(--c3)','var(--c4)'];
+  const MAX_PANEL = 4;
+
+  const els = {
+    apiKey: document.getElementById('apiKey'),
+    toggleKeyBtn: document.getElementById('toggleKeyBtn'),
+    keyStatus: document.getElementById('keyStatus'),
+    modelSearch: document.getElementById('modelSearch'),
+    modelList: document.getElementById('modelList'),
+    freeCountTag: document.getElementById('freeCountTag'),
+    pickedCount: document.getElementById('pickedCount'),
+    judgeSelect: document.getElementById('judgeSelect'),
+    showPaidJudge: document.getElementById('showPaidJudge'),
+    runBtn: document.getElementById('runBtn'),
+    runStatus: document.getElementById('runStatus'),
+    promptInput: document.getElementById('promptInput'),
+    promptMeta: document.getElementById('promptMeta'),
+    confluence: document.getElementById('confluence'),
+    emptyState: document.getElementById('emptyState'),
+  };
+
+  let allModels = [];       // full /models list
+  let freeModels = [];      // filtered :free
+  let selected = [];        // array of model ids, order = slot order
+  let keyValid = false;
+
+  // ---------- sessionStorage persistence (key only, tab-scoped) ----------
+  try{
+    const saved = sessionStorage.getItem('or_fusion_key');
+    if(saved) els.apiKey.value = saved;
+  }catch(e){ /* storage may be unavailable */ }
+
+  els.toggleKeyBtn.addEventListener('click', () => {
+    const isPw = els.apiKey.type === 'password';
+    els.apiKey.type = isPw ? 'text' : 'password';
+    els.toggleKeyBtn.textContent = isPw ? '🙈' : '👁';
+  });
+
+  let keyDebounce;
+  els.apiKey.addEventListener('input', () => {
+    try{ sessionStorage.setItem('or_fusion_key', els.apiKey.value); }catch(e){}
+    clearTimeout(keyDebounce);
+    keyValid = false;
+    updateRunButton();
+    const key = els.apiKey.value.trim();
+    if(!key){
+      setKeyStatus('', '');
+      resetModelArea('Enter a valid API key to load free models.');
+      return;
+    }
+    setKeyStatus('Checking key…', 'pending');
+    keyDebounce = setTimeout(() => loadModels(key), 500);
+  });
+
+  function setKeyStatus(msg, cls){
+    els.keyStatus.textContent = msg;
+    els.keyStatus.className = 'status-line ' + (cls||'');
+  }
+
+  function resetModelArea(msg){
+    allModels = []; freeModels = []; selected = [];
+    els.modelSearch.disabled = true;
+    els.modelList.innerHTML = `<div style="padding:.9rem; color:var(--text-faint); font-size:.78rem;">${escapeHtml(msg)}</div>`;
+    els.freeCountTag.textContent = '';
+    els.pickedCount.textContent = `0 / ${MAX_PANEL} selected`;
+    els.pickedCount.classList.remove('full');
+    els.judgeSelect.disabled = true;
+    els.judgeSelect.innerHTML = '<option>Load models first…</option>';
+    updateRunButton();
+  }
+
+  async function loadModels(key){
+    try{
+      const res = await fetch('https://openrouter.ai/api/v1/models', {
+        headers: { 'Authorization': 'Bearer ' + key }
+      });
+      if(!res.ok){
+        keyValid = false;
+        setKeyStatus(res.status === 401 ? 'Invalid key (401).' : `Could not load models (HTTP ${res.status}).`, 'err');
+        resetModelArea('Fix your API key above to load free models.');
+        return;
+      }
+      const data = await res.json();
+      allModels = (data.data || []).slice().sort((a,b) => (a.name||a.id).localeCompare(b.name||b.id));
+      freeModels = allModels.filter(isFreeModel);
+
+      keyValid = true;
+      setKeyStatus(`Key OK — ${allModels.length} models available.`, 'ok');
+      els.freeCountTag.textContent = `(${freeModels.length} found)`;
+
+      renderModelList(freeModels);
+      renderJudgeOptions();
+      els.modelSearch.disabled = false;
+      updateRunButton();
+    }catch(err){
+      keyValid = false;
+      setKeyStatus('Network error reaching OpenRouter.', 'err');
+      resetModelArea('Could not reach OpenRouter. Check your connection and try again.');
+    }
+  }
+
+  function isFreeModel(m){
+    if(m.id && m.id.endsWith(':free')) return true;
+    const p = m.pricing || {};
+    const nums = ['prompt','completion','request','image'].map(k => parseFloat(p[k] || '0'));
+    return nums.every(n => !isNaN(n) && n === 0);
+  }
+
+  function renderModelList(list){
+    if(list.length === 0){
+      els.modelList.innerHTML = `<div style="padding:.9rem; color:var(--text-faint); font-size:.78rem;">No free models match.</div>`;
+      return;
+    }
+    els.modelList.innerHTML = list.map(m => {
+      const checked = selected.includes(m.id);
+      const disabled = !checked && selected.length >= MAX_PANEL;
+      const ctx = m.context_length ? `· ${Math.round(m.context_length/1000)}k ctx` : '';
+      return `
+        <label class="model-item ${disabled ? 'disabled':''}" data-id="${escapeAttr(m.id)}">
+          <input type="checkbox" ${checked?'checked':''} ${disabled?'disabled':''} data-id="${escapeAttr(m.id)}" />
+          <span>
+            <span class="mi-name">${escapeHtml(m.name || m.id)}</span><br/>
+            <span class="mi-id">${escapeHtml(m.id)} ${ctx}</span>
+          </span>
+        </label>`;
+    }).join('');
+
+    els.modelList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const id = cb.dataset.id;
+        if(cb.checked){
+          if(selected.length < MAX_PANEL) selected.push(id);
+        }else{
+          selected = selected.filter(x => x !== id);
+        }
+        renderModelList(currentFilteredList());
+        updatePickedCount();
+        updateRunButton();
+      });
+    });
+  }
+
+  function currentFilteredList(){
+    const q = els.modelSearch.value.trim().toLowerCase();
+    if(!q) return freeModels;
+    return freeModels.filter(m =>
+      (m.id||'').toLowerCase().includes(q) || (m.name||'').toLowerCase().includes(q)
+    );
+  }
+
+  els.modelSearch.addEventListener('input', () => renderModelList(currentFilteredList()));
+
+  function updatePickedCount(){
+    els.pickedCount.textContent = `${selected.length} / ${MAX_PANEL} selected`;
+    els.pickedCount.classList.toggle('full', selected.length >= MAX_PANEL);
+  }
+
+  function renderJudgeOptions(){
+    const paid = els.showPaidJudge.checked;
+    const pool = paid ? allModels : freeModels;
+    els.judgeSelect.disabled = false;
+    const prior = els.judgeSelect.value;
+    els.judgeSelect.innerHTML = pool.map(m =>
+      `<option value="${escapeAttr(m.id)}">${escapeHtml(m.name || m.id)}${isFreeModel(m) ? '' : '  ($)'}</option>`
+    ).join('');
+    if(pool.some(m => m.id === prior)) els.judgeSelect.value = prior;
+  }
+  els.showPaidJudge.addEventListener('change', renderJudgeOptions);
+
+  // ---------- prompt char count ----------
+  els.promptInput.addEventListener('input', () => {
+    els.promptMeta.textContent = `${els.promptInput.value.length} characters`;
+    updateRunButton();
+  });
+
+  function updateRunButton(){
+    const ok = keyValid && selected.length >= 1 && els.promptInput.value.trim().length > 0 && els.judgeSelect.value;
+    els.runBtn.disabled = !ok;
+  }
+
+  // ---------- escaping ----------
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function escapeAttr(s){ return escapeHtml(s); }
+
+  // ---------- run fusion ----------
+  els.runBtn.addEventListener('click', runFusion);
+
+  function buildStage(){
+    const panelsHtml = selected.map((id, i) => {
+      const color = SLOT_COLORS[i % SLOT_COLORS.length];
+      const meta = freeModels.find(m => m.id === id) || allModels.find(m => m.id === id);
+      const name = meta ? (meta.name || meta.id) : id;
+      return `
+        <div class="panel" id="panel-${i}" style="--slot-color:${color}">
+          <div class="panel-head">
+            <span class="panel-dot"></span>
+            <span class="panel-name">${escapeHtml(name)}</span>
+          </div>
+          <div class="panel-id">${escapeHtml(id)}</div>
+          <div class="panel-body" id="panel-body-${i}"></div>
+          <div class="panel-state wait" id="panel-state-${i}"><span class="spin" style="display:none"></span><span>queued</span></div>
+        </div>`;
+    }).join('');
+
+    const judgeMeta = allModels.find(m => m.id === els.judgeSelect.value);
+    const judgeName = judgeMeta ? (judgeMeta.name || judgeMeta.id) : els.judgeSelect.value;
+
+    els.confluence.innerHTML = `
+      <div class="panels">${panelsHtml}</div>
+      <div class="funnel-wrap" aria-hidden="true">
+        <svg class="funnel-svg" viewBox="0 0 560 64">
+          ${selected.map((_, i) => {
+            const n = selected.length;
+            const x = n === 1 ? 280 : 60 + (i * (440/(Math.max(n-1,1))));
+            const color = SLOT_COLORS[i % SLOT_COLORS.length].replace('var(','').replace(')','');
+            return `<path class="funnel-line" id="funnel-${i}" d="M${x} 0 Q ${ (x+280)/2 } 50, 280 64" fill="none" stroke="${color}" stroke-width="2" stroke-opacity="0.7"/>`;
+          }).join('')}
+        </svg>
+      </div>
+      <div class="judge-card">
+        <div class="judge-head">
+          <div class="judge-title">
+            <span class="panel-dot"></span>
+            <h3>Judge synthesis</h3>
+          </div>
+          <span class="judge-model-tag">${escapeHtml(judgeName)}</span>
+        </div>
+        <div class="judge-body" id="judgeBody"><span class="judge-empty">Waiting on the panel…</span></div>
+        <div class="judge-state" id="judgeState" style="margin-top:.8rem;"><span class="spin" style="display:none"></span><span>idle</span></div>
+      </div>
+      <div class="run-footer">
+        <span id="runTimer">—</span>
+        <span id="runTokenInfo"></span>
+      </div>
+    `;
+  }
+
+  function setPanelState(i, state, label){
+    const el = document.getElementById(`panel-state-${i}`);
+    if(!el) return;
+    el.className = 'panel-state ' + state;
+    const spin = el.querySelector('.spin');
+    spin.style.display = state === 'run' ? 'inline-block' : 'none';
+    el.querySelector('span:last-child').textContent = label;
+    const panelEl = document.getElementById(`panel-${i}`);
+    if(panelEl) panelEl.classList.toggle('streaming', state === 'run');
+  }
+
+  function setJudgeState(state, label){
+    const el = document.getElementById('judgeState');
+    if(!el) return;
+    el.className = 'judge-state';
+    const spin = el.querySelector('.spin');
+    spin.style.display = state === 'run' ? 'inline-block' : 'none';
+    el.querySelector('span:last-child').textContent = label;
+  }
+
+  async function callModel(key, modelId, messages, signal){
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      signal,
+      headers: {
+        'Authorization': 'Bearer ' + key,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': location.href,
+        'X-Title': 'Confluence Fusion'
+      },
+      body: JSON.stringify({ model: modelId, messages })
+    });
+    const data = await res.json().catch(() => ({}));
+    if(!res.ok){
+      const msg = (data && data.error && data.error.message) ? data.error.message : `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    const choice = data.choices && data.choices[0];
+    const text = choice && choice.message && choice.message.content;
+    if(!text) throw new Error('Empty response from model.');
+    return text;
+  }
+
+  async function runFusion(){
+    const key = els.apiKey.value.trim();
+    const prompt = els.promptInput.value.trim();
+    const judgeId = els.judgeSelect.value;
+    if(!key || !prompt || selected.length === 0 || !judgeId) return;
+
+    els.emptyState.style.display = 'none';
+    els.runBtn.disabled = true;
+    els.runStatus.textContent = 'Running panel…';
+    els.runStatus.className = 'status-line pending';
+
+    buildStage();
+    const startTime = performance.now();
+    const timerEl = document.getElementById('runTimer');
+    const timerInt = setInterval(() => {
+      timerEl.textContent = ((performance.now() - startTime)/1000).toFixed(1) + 's elapsed';
+    }, 100);
+
+    const panelMessages = [{ role:'user', content: prompt }];
+
+    selected.forEach((_, i) => setPanelState(i, 'run', 'thinking…'));
+
+    const results = await Promise.allSettled(selected.map((id) =>
+      callModel(key, id, panelMessages)
+    ));
+
+    const panelOutputs = [];
+    results.forEach((r, i) => {
+      const bodyEl = document.getElementById(`panel-body-${i}`);
+      if(r.status === 'fulfilled'){
+        bodyEl.textContent = r.value;
+        setPanelState(i, 'done', 'complete');
+        panelOutputs.push({ id: selected[i], text: r.value, ok: true });
+      }else{
+        bodyEl.textContent = '';
+        bodyEl.innerHTML = `<span style="color:var(--bad)">${escapeHtml(r.reason && r.reason.message || 'Failed')}</span>`;
+        setPanelState(i, 'fail', 'failed');
+        panelOutputs.push({ id: selected[i], text: null, ok: false, error: r.reason && r.reason.message });
+        document.getElementById(`funnel-${i}`).style.opacity = '0.15';
+      }
+    });
+
+    // animate funnel flow
+    requestAnimationFrame(() => {
+      selected.forEach((_, i) => {
+        if(panelOutputs[i].ok){
+          const f = document.getElementById(`funnel-${i}`);
+          if(f) f.classList.add('flow');
+        }
+      });
+    });
+
+    const succeeded = panelOutputs.filter(p => p.ok);
+    if(succeeded.length === 0){
+      setJudgeState('fail', 'no panel responses to judge');
+      document.getElementById('judgeBody').innerHTML = `<span style="color:var(--bad)">All panel models failed — nothing to synthesize.</span>`;
+      clearInterval(timerInt);
+      els.runStatus.textContent = 'All panel models failed.';
+      els.runStatus.className = 'status-line err';
+      els.runBtn.disabled = false;
+      return;
+    }
+
+    els.runStatus.textContent = 'Panel done — judging…';
+    setJudgeState('run', 'synthesizing…');
+
+    const judgePrompt = buildJudgePrompt(prompt, panelOutputs);
+
+    try{
+      const verdict = await callModel(key, judgeId, [{ role:'user', content: judgePrompt }]);
+      document.getElementById('judgeBody').textContent = verdict;
+      setJudgeState('done', 'complete');
+      els.runStatus.textContent = 'Fusion complete.';
+      els.runStatus.className = 'status-line ok';
+    }catch(err){
+      document.getElementById('judgeBody').innerHTML = `<span style="color:var(--bad)">Judge failed: ${escapeHtml(err.message)}</span>`;
+      setJudgeState('fail', 'judge failed');
+      els.runStatus.textContent = 'Judge step failed — panel responses still visible above.';
+      els.runStatus.className = 'status-line err';
+    }finally{
+      clearInterval(timerInt);
+      timerEl.textContent = ((performance.now() - startTime)/1000).toFixed(1) + 's total';
+      const failedCount = panelOutputs.filter(p => !p.ok).length;
+      document.getElementById('runTokenInfo').textContent =
+        `${succeeded.length}/${selected.length} panel models succeeded` + (failedCount ? `, ${failedCount} failed` : '');
+      els.runBtn.disabled = false;
+    }
+  }
+
+  function buildJudgePrompt(originalPrompt, panelOutputs){
+    const blocks = panelOutputs.map((p, i) => {
+      const label = `Model ${i+1} (${p.id})`;
+      if(p.ok) return `### ${label}\n${p.text}`;
+      return `### ${label}\n[This model failed to respond: ${p.error || 'unknown error'}]`;
+    }).join('\n\n');
+
+    return [
+      `You are the judge in a multi-model panel. Several AI models were independently given the same user prompt. Your job is to read all of their responses and synthesize ONE final answer that:`,
+      `- Combines the strongest reasoning, facts, and structure from each response`,
+      `- Resolves contradictions between models (state briefly which you trusted and why, if material)`,
+      `- Drops anything that's clearly wrong, hallucinated, or off-topic`,
+      `- Notes any genuine unresolved disagreement instead of papering over it`,
+      `- Reads as a single confident, well-organized answer to the user — not a comparison of the models`,
+      ``,
+      `Original user prompt:`,
+      `"""${originalPrompt}"""`,
+      ``,
+      `Panel responses:`,
+      blocks,
+      ``,
+      `Now write the final synthesized answer for the user.`
+    ].join('\n');
+  }
+
+  updateRunButton();
+})();
+</script>
+</body>
+</html>
